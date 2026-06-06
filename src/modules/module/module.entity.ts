@@ -27,7 +27,7 @@ export class Module {
   course!: Course;
 
   @Field()
-  @Column({ name: 'order_number', type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1 })
   orderNumber!: number;
 
   @OneToMany(() => Lesson, (lesson) => lesson.module)

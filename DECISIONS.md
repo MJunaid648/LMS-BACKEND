@@ -28,3 +28,33 @@
 **Decision:** `Profile` keeps its own surrogate `id`; `user_id` is a UNIQUE foreign key, not the primary key.
 **Why:** Consistency — every table has the same `id` PK shape, which keeps base-entity/repository patterns and tooling uniform, and keeps the PK independent of the relationship.
 **Tradeoff:** One extra column + index compared to a shared-PK design (where `user_id` _is_ the PK). A shared PK would enforce 1:1 at the identity level for free and save the column; chose uniformity over that saving. (Note: with the surrogate PK, what actually enforces 1:1 is the UNIQUE constraint on `user_id` — drop it and the relation silently becomes 1:many.)
+
+## 2026-06-06 — SnakeNamingStrategy globally
+
+**Decision:** Using `typeorm-naming-strategies` `SnakeNamingStrategy` in both `app.module.ts` and `data-source.ts` instead of explicit `@JoinColumn({ name: '...' })` on every relation.
+**Why:** TypeORM defaults to camelCase column names (`courseId`, `instructorId`). The naming strategy automatically converts all property names to snake_case (`course_id`, `instructor_id`), matching our hand-written SQL and DB conventions without repetition.
+**Tradeoff:** Extra dependency. Column naming is now convention-driven rather than explicit — a new developer must know the strategy is active or the column names will look "magic." Must be added to both the app module and the standalone DataSource or they fall out of sync.
+
+## 2026-06-06 — ON DELETE RESTRICT on Course.instructor_id
+
+**Decision:** `instructor_id` FK on `courses` uses `ON DELETE RESTRICT`.
+**Why:** An instructor who owns active courses should not be hard-deletable. Deleting them would orphan courses that students may be enrolled in. RESTRICT forces the admin to deal with the courses first (reassign or delete), then delete the instructor.
+**Tradeoff:** Slightly more admin work during cleanup, but prevents silent data loss.
+
+## 2026-06-06 — ON DELETE CASCADE on Module and Lesson
+
+**Decision:** `course_id` on `modules` and `module_id` on `lessons` both use `ON DELETE CASCADE`.
+**Why:** A module has no meaning without its course; a lesson has no meaning without its module. When a course is deleted, its modules and lessons should be swept automatically. Forcing manual deletion of every lesson and module first would be operationally painful with no benefit.
+**Tradeoff:** Deleting a course is a destructive, irreversible operation that removes all nested content. Must be guarded at the application layer (e.g. require explicit confirmation, check for active enrollments before allowing deletion).
+
+## 2026-06-06 — DECIMAL(10,2) for price, not FLOAT
+
+**Decision:** `price` column on `courses` uses `DECIMAL(10,2)`.
+**Why:** `FLOAT` uses binary floating point arithmetic which cannot represent many decimal fractions precisely (e.g. 0.1 + 0.2 ≠ 0.3). Money values must be exact. `DECIMAL` stores values as exact fixed-point numbers.
+**Tradeoff:** Slightly more storage than FLOAT; arithmetic is slower. Irrelevant for a price column — correctness matters far more than speed here.
+
+## 2026-06-06 — Quiz belongs to Lesson, not Module
+
+**Decision:** `quizzes` table has `lesson_id` FK, not `module_id`.
+**Why:** A quiz tests the content of a specific lesson — it is scoped to that lesson's material. Attaching it to a module would imply it spans multiple lessons, which is a different feature (module-level assessment). For this LMS we are building lesson-level quizzes.
+**Tradeoff:** Module-level assessments are not supported without a schema change. If needed in future, a separate `module_assessments` table is the clean extension path rather than changing the quiz FK.

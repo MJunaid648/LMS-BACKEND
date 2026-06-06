@@ -33,20 +33,20 @@ export class User {
   @Column({ type: 'varchar', unique: true, length: 100 })
   email!: string;
 
-  @Column({ name: 'password_hash', type: 'varchar', length: 150 })
+  @Column({ type: 'varchar', length: 150 })
   passwordHash!: string;
 
   @Field(() => UserRole)
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role!: UserRole;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn()
   createdAt?: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn()
   updatedAt?: Date;
 
-  @DeleteDateColumn({ name: 'deleted_at' })
+  @DeleteDateColumn()
   deletedAt?: Date;
 
   @OneToOne(() => Profile, (profile) => profile.user)

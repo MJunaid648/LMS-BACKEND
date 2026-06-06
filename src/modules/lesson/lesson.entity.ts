@@ -17,13 +17,12 @@ export class Lesson {
   module!: Module;
 
   @Field()
-  @Column({ name: 'order_number', type: 'int', default: 1 })
+  @Column({ type: 'int', default: 1 })
   orderNumber!: number;
 
   @Field(() => String)
   @Column({
     type: 'varchar',
-    name: 'content_url',
     nullable: true,
     default: null,
   })
@@ -32,7 +31,6 @@ export class Lesson {
   @Field(() => String)
   @Column({
     type: 'bigint',
-    name: 'duration_seconds',
     nullable: true,
   })
   durationSeconds?: number;

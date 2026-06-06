@@ -33,7 +33,6 @@ export class Profile {
 
   @Field(() => String)
   @Column({
-    name: 'avatar_url',
     type: 'varchar',
     length: 500,
     nullable: true,

@@ -39,16 +39,16 @@ export class Course {
   price!: number;
 
   @Field()
-  @Column({ type: 'bool', name: 'is_published', default: false })
+  @Column({ type: 'bool', default: false })
   isPublished!: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn()
   createdAt?: Date;
 
-  @UpdateDateColumn({ name: 'updated_at' })
+  @UpdateDateColumn()
   updatedAt?: Date;
 
-  @DeleteDateColumn({ name: 'deleted_at' })
+  @DeleteDateColumn()
   deletedAt?: Date;
 
   @OneToMany(() => Module, (module) => module.course)
