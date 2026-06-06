@@ -7,8 +7,10 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   OneToOne,
+  OneToMany,
 } from 'typeorm';
-import { Profile } from '../profiles/profiles.entity';
+import { Profile } from '../profile/profile.entity';
+import { Course } from '../course/course.entity';
 
 export enum UserRole {
   ADMIN = 'ADMIN',
@@ -23,24 +25,20 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Field()
+  @Field(() => String)
   @Column({ type: 'varchar', length: 100 })
   name!: string;
 
-  @Field()
+  @Field(() => String)
   @Column({ type: 'varchar', unique: true, length: 100 })
   email!: string;
 
   @Column({ name: 'password_hash', type: 'varchar', length: 150 })
   passwordHash!: string;
 
-  @Field()
+  @Field(() => UserRole)
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role!: UserRole;
-
-  @Field(() => Profile)
-  @OneToOne(() => Profile, (profile) => profile.user)
-  profile!: Profile;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt?: Date;
@@ -50,4 +48,10 @@ export class User {
 
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt?: Date;
+
+  @OneToOne(() => Profile, (profile) => profile.user)
+  profile!: Profile;
+
+  @OneToMany(() => Course, (course) => course.instructor)
+  courses!: Course[];
 }

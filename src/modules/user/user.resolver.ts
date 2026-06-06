@@ -1,6 +1,6 @@
 import { Query, Resolver } from '@nestjs/graphql';
-import { User } from './users.entity';
-import { UsersService } from './users.service';
+import { User } from './user.entity';
+import { UsersService } from './user.service';
 
 @Resolver(() => User)
 export class UsersResolver {
