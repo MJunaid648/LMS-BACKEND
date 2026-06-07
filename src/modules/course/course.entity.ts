@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { User } from '../user/user.entity';
 import { Module } from '../module/module.entity';
+import { Enrollment } from '../enrollment/enrollment.entity';
 
 @ObjectType()
 @Entity('courses')
@@ -53,4 +54,7 @@ export class Course {
 
   @OneToMany(() => Module, (module) => module.course)
   modules!: Module[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.course)
+  enrollments!: Enrollment[];
 }

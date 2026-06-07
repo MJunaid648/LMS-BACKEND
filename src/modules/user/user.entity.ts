@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Profile } from '../profile/profile.entity';
 import { Course } from '../course/course.entity';
+import { Enrollment } from '../enrollment/enrollment.entity';
 
 export enum UserRole {
   ADMIN = 'ADMIN',
@@ -54,4 +55,7 @@ export class User {
 
   @OneToMany(() => Course, (course) => course.instructor)
   courses!: Course[];
+
+  @OneToMany(() => Enrollment, (enrollment) => enrollment.user)
+  enrollments!: Enrollment[];
 }
