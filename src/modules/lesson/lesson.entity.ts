@@ -13,7 +13,10 @@ export class Lesson {
   @Column({ type: 'varchar' })
   title!: string;
 
-  @ManyToOne(() => Module, (module) => module.lessons, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Module, (module) => module.lessons, {
+    onDelete: 'CASCADE',
+    nullable: false,
+  })
   module!: Module;
 
   @Field()
