@@ -58,3 +58,29 @@
 **Decision:** `quizzes` table has `lesson_id` FK, not `module_id`.
 **Why:** A quiz tests the content of a specific lesson — it is scoped to that lesson's material. Attaching it to a module would imply it spans multiple lessons, which is a different feature (module-level assessment). For this LMS we are building lesson-level quizzes.
 **Tradeoff:** Module-level assessments are not supported without a schema change. If needed in future, a separate `module_assessments` table is the clean extension path rather than changing the quiz FK.
+
+## 2026-06-11 — bcrypt for password hashing, not SHA-256 or encryption
+
+**Decision:** Passwords are hashed with `bcrypt` before storage. Encryption and fast hashing algorithms (SHA-256, MD5) are explicitly rejected.
+**Why:**
+- **Encryption is reversible** — it requires a key, and if that key is compromised, every stored password can be decrypted. Hashing is one-way; even if the hash is leaked, the original password cannot be mathematically recovered.
+- **SHA-256 is too fast** — fast hashing allows an attacker to run millions or billions of brute-force/dictionary guesses per second against a leaked hash database. bcrypt is deliberately slow (configurable via cost factor); at cost factor 12, a single hash takes ~250ms, limiting an attacker to a handful of guesses per second.
+- **bcrypt has a built-in salt** — every `bcrypt.hash()` call generates a cryptographically random salt and embeds it in the output string alongside the algorithm identifier and cost factor. This means two hashes of the same password are always different, defeating rainbow table attacks. `bcrypt.compare()` extracts the salt from the stored hash and re-runs the computation — no separate salt column needed.
+**Cost factor chosen:** 12. Low values (≤8) are too fast to be safe; high values (≥14) add noticeable latency to every login. 12 is the current industry-standard default balancing security and UX.
+**Tradeoff:** bcrypt is slow by design — that's the feature for login, but it means bcrypt must never be used for non-auth hashing (e.g. generating cache keys, checksums). Use SHA-256 or similar for those cases.
+
+## 2026-06-11 — Global JwtAuthGuard via APP_GUARD + @Public() decorator
+
+**Decision:** `JwtAuthGuard` is registered globally using `APP_GUARD` in `AppModule`. Public routes (register, login) are opted out using a custom `@Public()` decorator.
+**Why:**
+- The LMS has far more protected routes than public ones. A protected-by-default model means a developer must consciously opt out of protection — forgetting to do so on a sensitive route is impossible to miss because the route simply won't work without a valid token.
+- The alternative — opt-in protection via `@UseGuards()` on each resolver — has the opposite failure mode: forgetting `@UseGuards()` on a sensitive resolver silently exposes it. That is a security hole that may never be caught in testing.
+- Loud failures (blocked public route) are caught immediately. Silent failures (exposed protected route) may reach production undetected.
+**How @Public() works:** `@Public()` uses `SetMetadata` to attach a `isPublic: true` flag to the route handler's metadata. `JwtAuthGuard` reads this flag via `Reflector` before running token verification — if the flag is present, the guard returns `true` immediately without checking for a token.
+**Tradeoff:** Every new public route must be explicitly decorated with `@Public()` or it will return 401. This is intentional — the friction is the point.
+
+## 2026-06-11 — Auth folder structure + JwtAuthGuard in common/
+
+**Decision:** Auth-internal files (strategies, DTOs, service, resolver, module) live in `src/modules/auth/`. `JwtAuthGuard` and `@Public()` live in `src/common/`.
+**Why:** Strategies are auth's internal implementation detail — nothing outside auth instantiates or imports them directly. The guard and decorator, however, are used by every module in the app. Placing cross-cutting concerns in `common/` keeps feature modules clean and makes the shared nature of those files explicit by location.
+**Tradeoff:** A new developer must know to look in `common/` for the guard rather than `auth/`. Convention-driven, so it must be documented (here, and in the README).
