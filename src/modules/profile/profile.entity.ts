@@ -18,12 +18,11 @@ export class Profile {
   @Field(() => User)
   @OneToOne(() => User, (user) => user.profile, {
     onDelete: 'CASCADE',
-    nullable: false,
   })
   @JoinColumn({ name: 'user_id' })
-  user?: User;
+  user!: User;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
   @Column({
     type: 'varchar',
     length: 500,
@@ -31,7 +30,7 @@ export class Profile {
   })
   bio?: string;
 
-  @Field(() => String)
+  @Field(() => String, { nullable: true })
   @Column({
     type: 'varchar',
     length: 500,
