@@ -13,6 +13,7 @@ import { CourseModule } from './modules/course/course.module';
 import { LessonModule } from './modules/lesson/lesson.module';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { EnrollmentModule } from './modules/enrollment/enrollment.module';
     CourseModule,
     LessonModule,
     EnrollmentModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
