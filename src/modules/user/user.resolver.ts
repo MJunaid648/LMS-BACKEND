@@ -4,10 +4,10 @@ import { UsersService } from './user.service';
 
 @Resolver(() => User)
 export class UsersResolver {
-  constructor(private userService: UsersService) {}
+  constructor(private _userService: UsersService) {}
 
   @Query(() => [User])
   users() {
-    return this.userService.findAll();
+    return this._userService.findAll();
   }
 }
