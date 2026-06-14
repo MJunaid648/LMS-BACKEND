@@ -14,6 +14,9 @@ import { LessonModule } from './modules/lesson/lesson.module';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 @Module({
   imports: [
@@ -33,6 +36,7 @@ import { AuthModule } from './modules/auth/auth.module';
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       playground: true,
+      context: ({ req }: { req: Request }) => ({ req }),
     }),
     UsersModule,
     ProfilesModule,
@@ -43,6 +47,6 @@ import { AuthModule } from './modules/auth/auth.module';
     AuthModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
