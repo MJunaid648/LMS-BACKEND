@@ -1,12 +1,17 @@
 import { Profile } from './../profile/profile.entity';
 import { User, UserRole } from './../user/user.entity';
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { RegisterInput } from './dto/register.input';
 import { AuthResponse } from './dto/auth-response';
 import * as bcrypt from 'bcrypt';
+import { LoginInput } from './dto/login.input';
 
 @Injectable()
 export class AuthService {
@@ -39,19 +44,37 @@ export class AuthService {
           savedUser.role,
         );
         const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
-
         await manager.update(User, savedUser.id, {
           hashedRefreshToken,
         });
-
         const profile = manager.create(Profile, {
           user: savedUser,
         });
         await manager.save(profile);
         return { user: savedUser, refreshToken, accessToken };
       });
-
     return { user, refreshToken, accessToken };
+  }
+
+  async login(input: LoginInput): Promise<AuthResponse> {
+    const { email, password } = input;
+    const userRepository = this._dataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { email } });
+    if (!user)
+      throw new UnauthorizedException('Email or password are incorrect');
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPassword)
+      throw new UnauthorizedException('Email or password are incorrect');
+    const { refreshToken, accessToken } = this._generateTokens(
+      user.id,
+      user.email,
+      user.role,
+    );
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await userRepository.update(user.id, {
+      hashedRefreshToken,
+    });
+    return { user, accessToken, refreshToken };
   }
 
   private _generateTokens(userId: number, email: string, role: UserRole) {
