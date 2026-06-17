@@ -38,6 +38,10 @@ import { RolesGuard } from './common/guards/roles.guard';
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       playground: true,
       context: ({ req }: { req: Request }) => ({ req }),
+      formatError: (error) => ({
+        message: error.message,
+        code: error.extensions?.code,
+      }),
     }),
     UsersModule,
     ProfilesModule,
