@@ -1,7 +1,8 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -14,6 +15,8 @@ export enum EnrollmentStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
 }
+registerEnumType(EnrollmentStatus, { name: 'EnrollmentStatus' });
+
 @ObjectType()
 @Entity('enrollments')
 @Unique(['user', 'course'])
@@ -22,19 +25,19 @@ export class Enrollment {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Field(() => User, { nullable: true })
+  @Field(() => User)
   @ManyToOne(() => User, (user) => user.enrollments, {
-    onDelete: 'SET NULL',
-    nullable: true,
+    onDelete: 'CASCADE',
+    nullable: false,
   })
-  user?: User;
+  user!: User;
 
-  @Field(() => Course, { nullable: true })
+  @Field(() => Course)
   @ManyToOne(() => Course, (course) => course.enrollments, {
-    onDelete: 'SET NULL',
-    nullable: true,
+    onDelete: 'CASCADE',
+    nullable: false,
   })
-  course?: Course;
+  course!: Course;
 
   @Field()
   @Column({
@@ -51,4 +54,7 @@ export class Enrollment {
   @Field()
   @CreateDateColumn()
   enrolledAt!: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
 }

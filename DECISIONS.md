@@ -63,24 +63,112 @@
 
 **Decision:** Passwords are hashed with `bcrypt` before storage. Encryption and fast hashing algorithms (SHA-256, MD5) are explicitly rejected.
 **Why:**
+
 - **Encryption is reversible** — it requires a key, and if that key is compromised, every stored password can be decrypted. Hashing is one-way; even if the hash is leaked, the original password cannot be mathematically recovered.
 - **SHA-256 is too fast** — fast hashing allows an attacker to run millions or billions of brute-force/dictionary guesses per second against a leaked hash database. bcrypt is deliberately slow (configurable via cost factor); at cost factor 12, a single hash takes ~250ms, limiting an attacker to a handful of guesses per second.
 - **bcrypt has a built-in salt** — every `bcrypt.hash()` call generates a cryptographically random salt and embeds it in the output string alongside the algorithm identifier and cost factor. This means two hashes of the same password are always different, defeating rainbow table attacks. `bcrypt.compare()` extracts the salt from the stored hash and re-runs the computation — no separate salt column needed.
-**Cost factor chosen:** 12. Low values (≤8) are too fast to be safe; high values (≥14) add noticeable latency to every login. 12 is the current industry-standard default balancing security and UX.
-**Tradeoff:** bcrypt is slow by design — that's the feature for login, but it means bcrypt must never be used for non-auth hashing (e.g. generating cache keys, checksums). Use SHA-256 or similar for those cases.
+  **Cost factor chosen:** 12 for passwords, 10 for refresh tokens. Low values (≤8) are too fast to be safe; high values (≥14) add noticeable latency to every login. 12 is the current industry-standard default.
+  **Tradeoff:** bcrypt is slow by design — that's the feature for passwords, but it means bcrypt must never be used for non-auth hashing (e.g. cache keys, checksums). Use SHA-256 or similar for those cases.
+
+## 2026-06-11 — Auto-login on registration
+
+**Decision:** `register()` returns `AuthResponse` (accessToken + refreshToken + user) instead of just the user object.
+**Why:** Auto-login after registration is better UX — the user doesn't need to fill in the login form immediately after registering. The response shape is identical to `login()`, which keeps the API consistent.
+**Tradeoff:** Slightly more work in `register()` — token generation + refresh token storage added to the registration flow.
+
+## 2026-06-11 — Stateful refresh token storage (hashed) on User row
+
+**Decision:** After issuing a refresh token, its bcrypt hash is stored in `hashedRefreshToken` on the `User` entity (nullable). Raw token never persists.
+**Why:**
+
+- Stateless refresh (verify signature only) cannot revoke tokens. If a refresh token is stolen, the attacker has access until expiry (7 days).
+- Storing the hash means logout actually works — null out the column, token is immediately invalidated.
+- One user, one valid refresh session at a time — logging in again invalidates the previous refresh token.
+- Hash (not raw token) is stored so a leaked DB doesn't expose valid tokens directly.
+  **Tradeoff:** Every refresh hits the DB to compare hashes. At scale this is a cache candidate (Redis with TTL = refresh token expiry). Acceptable for this LMS.
+
+## 2026-06-11 — Separate secrets for access and refresh tokens
+
+**Decision:** `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are different values in `.env`. Access and refresh tokens are signed with different secrets.
+**Why:** If both tokens share the same secret, a stolen access token could be presented to the refresh endpoint and pass signature verification — same secret means same check passes. Attacker gets infinite access by continuously refreshing. Separate secrets mean each token is only valid on its intended endpoint.
+**Tradeoff:** Two secrets to manage instead of one. Both must be rotated together on a security incident.
 
 ## 2026-06-11 — Global JwtAuthGuard via APP_GUARD + @Public() decorator
 
 **Decision:** `JwtAuthGuard` is registered globally using `APP_GUARD` in `AppModule`. Public routes (register, login) are opted out using a custom `@Public()` decorator.
 **Why:**
-- The LMS has far more protected routes than public ones. A protected-by-default model means a developer must consciously opt out of protection — forgetting to do so on a sensitive route is impossible to miss because the route simply won't work without a valid token.
-- The alternative — opt-in protection via `@UseGuards()` on each resolver — has the opposite failure mode: forgetting `@UseGuards()` on a sensitive resolver silently exposes it. That is a security hole that may never be caught in testing.
-- Loud failures (blocked public route) are caught immediately. Silent failures (exposed protected route) may reach production undetected.
-**How @Public() works:** `@Public()` uses `SetMetadata` to attach a `isPublic: true` flag to the route handler's metadata. `JwtAuthGuard` reads this flag via `Reflector` before running token verification — if the flag is present, the guard returns `true` immediately without checking for a token.
-**Tradeoff:** Every new public route must be explicitly decorated with `@Public()` or it will return 401. This is intentional — the friction is the point.
 
-## 2026-06-11 — Auth folder structure + JwtAuthGuard in common/
+- The LMS has far more protected routes than public ones. Protected-by-default means forgetting to protect a sensitive route is impossible — it's already protected.
+- The alternative (opt-in via `@UseGuards()` per resolver) has a silent failure mode: forgetting `@UseGuards()` on a sensitive resolver exposes it without any error.
+- Loud failures (blocked public route → 401) are caught immediately. Silent failures (exposed protected route) may reach production undetected.
+  **How @Public() works:** Uses `SetMetadata(IS_PUBLIC_KEY, true)` to attach a flag to the handler metadata. `JwtAuthGuard` reads it via `Reflector` — if present, returns `true` immediately without checking the token.
+  **Tradeoff:** Every new public route must be explicitly decorated with `@Public()` or it returns 401. Intentional — the friction is the point.
 
-**Decision:** Auth-internal files (strategies, DTOs, service, resolver, module) live in `src/modules/auth/`. `JwtAuthGuard` and `@Public()` live in `src/common/`.
-**Why:** Strategies are auth's internal implementation detail — nothing outside auth instantiates or imports them directly. The guard and decorator, however, are used by every module in the app. Placing cross-cutting concerns in `common/` keeps feature modules clean and makes the shared nature of those files explicit by location.
-**Tradeoff:** A new developer must know to look in `common/` for the guard rather than `auth/`. Convention-driven, so it must be documented (here, and in the README).
+## 2026-06-11 — Auth folder structure + shared concerns in common/
+
+**Decision:** Auth-internal files (strategies, DTOs, service, resolver, module) live in `src/modules/auth/`. `JwtAuthGuard`, `RolesGuard`, `@Public()`, `@CurrentUser()`, `@Roles()`, `GlobalExceptionFilter`, and `LoggingInterceptor` live in `src/common/`.
+**Why:** Strategies are auth's internal implementation detail. Guards, decorators, filters, and interceptors are used by every module in the app — their location in `common/` makes their cross-cutting nature explicit by convention.
+**Tradeoff:** A new developer must know to look in `common/` for shared primitives. Must be documented in README.
+
+## 2026-06-11 — getRequest() override in JwtAuthGuard for GraphQL
+
+**Decision:** `JwtAuthGuard` overrides `getRequest(context)` to extract the request from the GQL execution context.
+**Why:** Passport was designed for REST. Without this override, Passport looks for `req.logIn` on the wrong object and crashes with `Cannot read properties of undefined (reading 'logIn')`. The override tells Passport where to find the request in a GraphQL context.
+**Tradeoff:** Any new Passport-based guard in this app must include the same override or it will fail in GraphQL context.
+
+## 2026-06-13 — RolesGuard registered globally — authz separate from authn
+
+**Decision:** `RolesGuard` is registered globally via `APP_GUARD` after `JwtAuthGuard`. Routes requiring specific roles are decorated with `@Roles(UserRole.X)`. Routes with no `@Roles()` decorator are accessible to any authenticated user.
+**Why:** Separating authentication (JwtAuthGuard) and authorization (RolesGuard) keeps each guard with a single responsibility. Order matters — RolesGuard needs `req.user` that JwtAuthGuard attaches, so authn must run first.
+**Tradeoff:** Every role-restricted route must be explicitly decorated. Forgetting `@Roles()` means any authenticated user can access it — but this is a loud failure caught in testing, not a silent security hole.
+
+## 2026-06-13 — Ownership checks in service layer, not guards
+
+**Decision:** Resource ownership checks (e.g. "does this instructor own this course?") are performed in the service method, not in a guard.
+**Why:** Guards run before the resolver — the resource hasn't been fetched yet. Ownership requires fetching the resource first, then comparing `resource.ownerId === currentUser.id`. The service is the correct layer for this.
+**Pattern:** fetch resource → check ownership → throw `ForbiddenException` if not owner → proceed.
+**Tradeoff:** Ownership check is a DB query. If the resolver also fetches the same resource, that's two queries. Acceptable at this scale; can be optimized later with a single fetch.
+
+## 2026-06-17 — Global exception filter + Apollo formatError
+
+**Decision:** A global `GlobalExceptionFilter` catches all exceptions. Apollo's `formatError` controls the final error shape sent to clients.
+**Why:**
+
+- Global filter ensures consistent error handling — no matter where an exception is thrown (guard, pipe, service, resolver), it goes through one place.
+- `formatError` in Apollo is required to suppress stacktraces — Apollo adds its own stacktrace to responses regardless of what the filter returns. Without `formatError`, internal details leak to clients.
+- Two cases: `HttpException` (NestJS controlled, use its message and status) vs everything else (generic "Internal server error", status 500).
+  **Tradeoff:** `formatError` strips all error extensions except what you explicitly include. Any custom error metadata must be explicitly passed through.
+
+## 2026-06-17 — Structured logging with NestJS Logger + request ID
+
+**Decision:** All logging uses NestJS `Logger`. `console.log` is banned. Every request is assigned a `randomUUID()` request ID. Log entries are structured JSON objects.
+**Why:**
+
+- Structured JSON logs are parseable by Datadog, ELK stack, CloudWatch — plain strings are not searchable.
+- Request ID ties all log lines from the same request together, enabling tracing in concurrent environments.
+- NestJS `Logger` includes the class name context automatically, making log sources identifiable.
+  **Tradeoff:** Slightly more verbose than `console.log`. In production, swap for `winston` or `pino` for better performance and log levels.
+
+## 2026-06-18 — CourseStatus enum instead of isPublished boolean
+
+**Decision:** Replaced `isPublished: boolean` with `status: CourseStatus` enum (DRAFT, PUBLISHED, ARCHIVED).
+**Why:** Boolean only supports two states. Archived courses need a third state — hidden from catalog but existing enrollments remain valid. Enum handles all three cleanly.
+**Tradeoff:** Schema change required. Any existing code checking `isPublished` must be updated.
+
+## 2026-06-18 — Index on courses.status
+
+**Decision:** Added `@Index()` on `courses.status` column.
+**Why:** Almost every course listing query filters by status (`WHERE status = 'PUBLISHED'`). Without an index this is a full table scan on every request.
+**Tradeoff:** Small write overhead on every course status update. Negligible compared to read performance gain.
+
+## 2026-06-18 — Enrollment soft delete instead of SET NULL on FKs
+
+**Decision:** `Enrollment` uses `@DeleteDateColumn()` for soft delete. FKs use `ON DELETE CASCADE`, not `SET NULL`.
+**Why:** `SET NULL` breaks the `UNIQUE(user_id, course_id)` constraint — MySQL treats two NULLs as distinct, allowing duplicate nulled-out rows. Soft delete retains history without breaking constraints.
+**Tradeoff:** Deleted enrollments remain in the table. Queries must filter `WHERE deleted_at IS NULL` to exclude them — TypeORM handles this automatically with soft delete.
+
+## 2026-06-18 — UNIQUE(user_id, course_id) on enrollments
+
+**Decision:** Composite unique constraint on `(user_id, course_id)` in enrollments table.
+**Why:** Application-level duplicate checks have race conditions — two simultaneous requests can both pass the check and both insert. The DB constraint is the real safety net regardless of isolation level.
+**Tradeoff:** Duplicate enrollment attempts throw a DB-level error that must be caught and converted to a clean `ConflictException`.
