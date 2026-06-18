@@ -1,9 +1,10 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
+import { Field, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 import {
   Column,
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -12,6 +13,13 @@ import {
 import { User } from '../user/user.entity';
 import { Module } from '../module/module.entity';
 import { Enrollment } from '../enrollment/enrollment.entity';
+
+export enum CourseStatus {
+  DRAFT = 'DRAFT',
+  PUBLISHED = 'PUBLISHED',
+  ARCHIVED = 'ARCHIVED',
+}
+registerEnumType(CourseStatus, { name: 'CourseStatus' });
 
 @ObjectType()
 @Entity('courses')
@@ -36,12 +44,13 @@ export class Course {
   instructor!: User;
 
   @Field(() => String)
-  @Column({ type: 'decimal', default: 0 })
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   price!: number;
 
-  @Field()
-  @Column({ type: 'bool', default: false })
-  isPublished!: boolean;
+  @Index()
+  @Field(() => CourseStatus)
+  @Column({ type: 'enum', enum: CourseStatus, default: CourseStatus.DRAFT })
+  status!: CourseStatus;
 
   @CreateDateColumn()
   createdAt?: Date;
