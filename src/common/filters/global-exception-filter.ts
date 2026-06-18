@@ -1,12 +1,13 @@
-import { Catch, HttpException } from '@nestjs/common';
+import { Catch, HttpException, Logger } from '@nestjs/common';
 import { GqlExceptionFilter } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql/error';
 
 @Catch()
 export class GlobalExceptionFilter implements GqlExceptionFilter {
   constructor() {}
+  private readonly _logger = new Logger(GlobalExceptionFilter.name);
   catch(exception: unknown) {
-    console.log('exception: ', exception);
+    this._logger.error(exception);
     let message = 'Internal server error';
     let status = 500;
     if (exception instanceof HttpException) {
