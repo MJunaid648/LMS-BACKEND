@@ -12,6 +12,7 @@ import { RegisterInput } from './dto/register.input';
 import { AuthResponse } from './dto/auth-response';
 import * as bcrypt from 'bcrypt';
 import { LoginInput } from './dto/login.input';
+import { Payload } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
@@ -83,6 +84,27 @@ export class AuthService {
       hashedRefreshToken: null,
     });
     return true;
+  }
+
+  async refresh(token: string): Promise<AuthResponse> {
+    const userRepository = this._dataSource.getRepository(User);
+    const payload: Payload = this._jwtService.verify(token, {
+      secret: this._configService.get<string>('JWT_REFRESH_SECRET'),
+    });
+    const user = await userRepository.findOne({ where: { id: payload.sub } });
+    if (!user) throw new UnauthorizedException();
+    const isValid = await bcrypt.compare(token, user.hashedRefreshToken!);
+    if (!isValid) throw new UnauthorizedException();
+    const { refreshToken, accessToken } = this._generateTokens(
+      user.id,
+      user.email,
+      user.role,
+    );
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await userRepository.update(user.id, {
+      hashedRefreshToken,
+    });
+    return { accessToken, refreshToken, user };
   }
 
   private _generateTokens(userId: number, email: string, role: UserRole) {

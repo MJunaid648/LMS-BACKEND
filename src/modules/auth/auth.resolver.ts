@@ -19,17 +19,23 @@ export class AuthResolver {
   @Public()
   @Mutation(() => AuthResponse)
   register(@Args('input') input: RegisterInput) {
-    return this.authService.register(input);
+    return this._authService.register(input);
   }
 
   @Public()
   @Mutation(() => AuthResponse)
   login(@Args('input') input: LoginInput) {
-    return this.authService.login(input);
+    return this._authService.login(input);
   }
 
   @Mutation(() => Boolean)
   logout(@CurrentUser() user: User) {
-    return this.authService.logout(user);
+    return this._authService.logout(user);
+  }
+
+  @Public()
+  @Mutation(() => AuthResponse)
+  refresh(@Args('token') token: string) {
+    return this._authService.refresh(token);
   }
 }
