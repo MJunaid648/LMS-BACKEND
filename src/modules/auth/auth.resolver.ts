@@ -27,4 +27,9 @@ export class AuthResolver {
   login(@Args('input') input: LoginInput) {
     return this.authService.login(input);
   }
+
+  @Query(() => Boolean)
+  logout(@CurrentUser() user: User) {
+    return this.authService.logout(user);
+  }
 }

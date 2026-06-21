@@ -38,8 +38,8 @@ export class User {
   @Column({ type: 'varchar', length: 150 })
   passwordHash!: string;
 
-  @Column({ nullable: true })
-  hashedRefreshToken?: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  hashedRefreshToken?: string | null;
 
   @Field(() => UserRole)
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })

@@ -77,6 +77,14 @@ export class AuthService {
     return { user, accessToken, refreshToken };
   }
 
+  async logout(user: User): Promise<boolean> {
+    const userRepository = this._dataSource.getRepository(User);
+    await userRepository.update(user.id, {
+      hashedRefreshToken: null,
+    });
+    return true;
+  }
+
   private _generateTokens(userId: number, email: string, role: UserRole) {
     const accessToken = this._jwtService.sign(
       {
