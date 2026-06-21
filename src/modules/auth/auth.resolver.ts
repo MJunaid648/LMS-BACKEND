@@ -9,7 +9,7 @@ import { LoginInput } from './dto/login.input';
 
 @Resolver()
 export class AuthResolver {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly _authService: AuthService) {}
 
   @Query(() => User)
   me(@CurrentUser() user: User) {
@@ -28,7 +28,7 @@ export class AuthResolver {
     return this.authService.login(input);
   }
 
-  @Query(() => Boolean)
+  @Mutation(() => Boolean)
   logout(@CurrentUser() user: User) {
     return this.authService.logout(user);
   }
